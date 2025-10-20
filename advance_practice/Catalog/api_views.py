@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count
 from .models import Category, Product, ProductImage, Comment, Voucher
@@ -326,3 +327,149 @@ class VoucherViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         """Only show vouchers belonging to current user"""
         return Voucher.objects.filter(user=self.request.user)
+
+
+# ==================== REPORT APIs ====================
+
+class ReportAPIView(APIView):
+    """
+    API endpoint for various reports
+    
+    Endpoints:
+    - GET /api/reports/products-per-category/ - Total products per category
+    - GET /api/reports/product-views/{id}/ - Total views of a specific product
+    - GET /api/reports/product-comments/{id}/ - Total comments on a specific product
+    - GET /api/reports/category-stats/ - Detailed statistics for all categories
+    """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
+    def get(self, request):
+        """Return available report endpoints"""
+        return Response({
+            'message': 'Available report endpoints',
+            'endpoints': {
+                'products_per_category': '/api/reports/products-per-category/',
+                'product_views': '/api/reports/product-views/{product_id}/',
+                'product_comments': '/api/reports/product-comments/{product_id}/',
+                'category_stats': '/api/reports/category-stats/',
+            }
+        })
+
+
+class ProductsPerCategoryReportAPIView(APIView):
+    """
+    Report: Total of products per category
+    GET /api/reports/products-per-category/
+    
+    Returns count of products in each category
+    """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
+    def get(self, request):
+        # Annotate categories with product count
+        categories = Category.objects.annotate(
+            product_count=Count('products')
+        ).values('id', 'name', 'slug', 'product_count').order_by('-product_count')
+        
+        return Response({
+            'total_categories': categories.count(),
+            'categories': list(categories)
+        })
+
+
+class ProductViewsReportAPIView(APIView):
+    """
+    Report: Total views of a product
+    GET /api/reports/product-views/{product_id}/
+    
+    Returns view count for a specific product
+    """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
+    def get(self, request, product_id):
+        try:
+            product = Product.objects.get(id=product_id)
+            return Response({
+                'product_id': product.id,
+                'product_name': product.name,
+                'product_slug': product.slug,
+                'total_views': product.view_count,
+                'created_at': product.created_at,
+            })
+        except Product.DoesNotExist:
+            return Response(
+                {'error': 'Product not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class ProductCommentsReportAPIView(APIView):
+    """
+    Report: Total comments on a product
+    GET /api/reports/product-comments/{product_id}/
+    
+    Returns comment count and list of comments for a specific product
+    """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
+    def get(self, request, product_id):
+        try:
+            product = Product.objects.get(id=product_id)
+            comments = product.comments.all()
+            total_comments = comments.count()
+            
+            # Get comment details with user info
+            comment_list = comments.values(
+                'id', 'body', 'created_at', 'user__username', 'user__email'
+            ).order_by('-created_at')
+            
+            return Response({
+                'product_id': product.id,
+                'product_name': product.name,
+                'product_slug': product.slug,
+                'total_comments': total_comments,
+                'comments': list(comment_list)
+            })
+        except Product.DoesNotExist:
+            return Response(
+                {'error': 'Product not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class CategoryStatsReportAPIView(APIView):
+    """
+    Report: Detailed statistics for all categories
+    GET /api/reports/category-stats/
+    
+    Returns comprehensive statistics including product count, total views, comments
+    """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
+    def get(self, request):
+        categories = Category.objects.all()
+        stats = []
+        
+        for category in categories:
+            products = category.products.all()
+            total_views = sum(p.view_count for p in products)
+            total_comments = Comment.objects.filter(product__in=products).count()
+            
+            stats.append({
+                'category_id': category.id,
+                'category_name': category.name,
+                'category_slug': category.slug,
+                'total_products': products.count(),
+                'total_views': total_views,
+                'total_comments': total_comments,
+                'has_parent': category.parent is not None,
+                'parent_name': category.parent.name if category.parent else None,
+            })
+        
+        # Sort by total products descending
+        stats.sort(key=lambda x: x['total_products'], reverse=True)
+        
+        return Response({
+            'total_categories': len(stats),
+            'statistics': stats
+        })
