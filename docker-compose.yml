@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # 2. Dịch vụ Web (Django)
+  web:
+    network_mode: "host"
+    build: .
+    command: gunicorn advance_practice.wsgi:application --bind 0.0.0.0:8000 --chdir=/app/advance_practice
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+
+  # 3. Dịch vụ Celery Worker
+  worker:
+    network_mode: "host"
+    build: .
+    command: celery -A advance_practice worker -l info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+    working_dir: /app/advance_practice
+    depends_on:
+      - web
+
+  # 4. Dịch vụ Celery Beat (Nếu bạn dùng schedule)
+  beat:
+    network_mode: "host"
+    build: .
+    command: celery -A advance_practice beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+    working_dir: /app/advance_practice
+    depends_on:
+      - web

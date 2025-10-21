@@ -5,3 +5,9 @@ djangorestframework
 djangorestframework-simplejwt
 PyJWT
 django-filter
+celery[redis]
+django-celery-results
+django-celery-beat
+redis
+python-dotenv
+gunicorn

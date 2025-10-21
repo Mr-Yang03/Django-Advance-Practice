@@ -11,9 +11,15 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env file
+env_path = BASE_DIR.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 
 # Quick-start development settings - unsuitable for production
@@ -41,6 +47,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'django_filters',
+    'django_celery_beat',
     'User',
     'Catalog',
 ]
@@ -89,11 +96,11 @@ AUTH_USER_MODEL = 'User.User'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'my_database',
-        'USER': 'admin',
-        'PASSWORD': 'thang123',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.environ.get('NAME'),
+        'USER': os.environ.get('USER'),
+        'PASSWORD': os.environ.get('PASSWORD'),
+        'HOST': os.environ.get('HOST'),
+        'PORT': os.environ.get('PORT'),
     }
 }
 
@@ -174,3 +181,54 @@ SIMPLE_JWT = {
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
     'TOKEN_TYPE_CLAIM': 'token_type',
 }
+
+# --- Celery Configuration ---
+from celery.schedules import crontab
+
+# URL point to Redis broker
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL')
+
+# URL point to Redis result backend
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND')
+
+# Configuration for using django-celery-results
+# CELERY_RESULT_BACKEND = 'django-db'
+
+# Format for serializing task content
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+
+# Time zone
+CELERY_TIMEZONE = 'Asia/Ho_Chi_Minh'
+
+# Celery Beat Schedule - Periodic Tasks
+CELERY_BEAT_SCHEDULE = {
+    # Database health check - runs every 1 minute
+    'db-health-check-every-minute': {
+        'task': 'User.tasks.db_health_check',
+        'schedule': 60.0,  # Run every 60 seconds (1 minute)
+    },
+    # Daily signup report - runs every day at 5:40 PM
+    'daily-signup-report': {
+        'task': 'User.tasks.signup_report',
+        'schedule': crontab(hour=17, minute=40),  # Run at 5:40 PM every day
+    },
+}
+
+# Configuration for using django-celery-results
+# CELERY_RESULT_EXTENDED = True
+
+# --- Email Configuration ---
+
+# For development: emails will be printed to console
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# For production, use SMTP:
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST')
+EMAIL_PORT = os.environ.get('EMAIL_PORT')
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL')

@@ -4,6 +4,7 @@ from .models import User
 import django.contrib.messages as messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from .signals import user_signed_up
 
 # Create your views here.
 def register(request):
@@ -38,9 +39,11 @@ def register(request):
                 first_name=first_name,
                 last_name=last_name
             )
-            # UserProfile sẽ được tự động tạo bởi signal
+            
+            # Emit custom signal for user signup
+            user_signed_up.send(sender=register, user=user)
 
-            messages.success(request, 'Account created successfully! Please login.')
+            messages.success(request, 'Account created successfully! Please check your email for confirmation.')
         except Exception as e:
             messages.error(request, f'Error creating account: {str(e)}')
 

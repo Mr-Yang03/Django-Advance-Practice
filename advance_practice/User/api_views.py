@@ -10,6 +10,7 @@ from .serializers import (
     LoginSerializer,
     ChangePasswordSerializer
 )
+from .signals import user_signed_up
 
 
 class RegisterAPIView(generics.CreateAPIView):
@@ -26,11 +27,14 @@ class RegisterAPIView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         
+        # Emit custom signal for user signup
+        user_signed_up.send(sender=self.__class__, user=user)
+        
         # Generate tokens for the new user
         refresh = RefreshToken.for_user(user)
         
         return Response({
-            'message': 'User registered successfully',
+            'message': 'User registered successfully. Confirmation email will be sent shortly.',
             'user': UserSerializer(user).data,
             'tokens': {
                 'refresh': str(refresh),
