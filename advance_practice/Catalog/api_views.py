@@ -6,6 +6,8 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
+from drf_spectacular.types import OpenApiTypes
 from .models import Category, Product, ProductImage, Comment, Voucher
 from .serializers import (
     CategorySerializer, CategoryTreeSerializer,
@@ -14,6 +16,54 @@ from .serializers import (
 )
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Categories'],
+        summary='List Categories',
+        description='Get paginated list of categories with optional filtering',
+        parameters=[
+            OpenApiParameter(
+                name='parent',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='Filter by parent category ID (use 0 or null for root categories)',
+                required=False
+            ),
+            OpenApiParameter(
+                name='search',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Search in category name and description',
+                required=False
+            )
+        ]
+    ),
+    create=extend_schema(
+        tags=['Categories'],
+        summary='Create Category',
+        description='Create a new category (with optional image upload)'
+    ),
+    retrieve=extend_schema(
+        tags=['Categories'],
+        summary='Get Category',
+        description='Get details of a specific category'
+    ),
+    update=extend_schema(
+        tags=['Categories'],
+        summary='Update Category',
+        description='Update category details'
+    ),
+    partial_update=extend_schema(
+        tags=['Categories'],
+        summary='Partial Update Category',
+        description='Partially update category details'
+    ),
+    destroy=extend_schema(
+        tags=['Categories'],
+        summary='Delete Category',
+        description='Delete a category'
+    )
+)
 class CategoryViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Category CRUD operations with tree structure support
@@ -29,7 +79,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     """
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
@@ -50,6 +100,12 @@ class CategoryViewSet(viewsets.ModelViewSet):
         
         return queryset
     
+    @extend_schema(
+        tags=['Categories'],
+        summary='Get Category Tree',
+        description='Get all categories in a hierarchical tree structure',
+        responses={200: CategoryTreeSerializer(many=True)}
+    )
     @action(detail=False, methods=['get'])
     def tree(self, request):
         """
@@ -60,6 +116,12 @@ class CategoryViewSet(viewsets.ModelViewSet):
         serializer = CategoryTreeSerializer(root_categories, many=True, context={'request': request})
         return Response(serializer.data)
     
+    @extend_schema(
+        tags=['Categories'],
+        summary='Get Root Categories',
+        description='Get only root categories (categories without parent)',
+        responses={200: CategorySerializer(many=True)}
+    )
     @action(detail=False, methods=['get'])
     def root(self, request):
         """
@@ -70,6 +132,12 @@ class CategoryViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(root_categories, many=True)
         return Response(serializer.data)
     
+    @extend_schema(
+        tags=['Categories'],
+        summary='Get Category Children',
+        description='Get all child categories of a specific category',
+        responses={200: CategorySerializer(many=True)}
+    )
     @action(detail=True, methods=['get'])
     def children(self, request, pk=None):
         """
@@ -81,6 +149,12 @@ class CategoryViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(children, many=True)
         return Response(serializer.data)
     
+    @extend_schema(
+        tags=['Categories'],
+        summary='Get Category Products',
+        description='Get all products in a specific category',
+        responses={200: ProductListSerializer(many=True)}
+    )
     @action(detail=True, methods=['get'])
     def products(self, request, pk=None):
         """
@@ -93,6 +167,75 @@ class CategoryViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Products'],
+        summary='List Products',
+        description='Get paginated list of products with filtering and search',
+        parameters=[
+            OpenApiParameter(
+                name='categories',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='Filter by category ID',
+                required=False
+            ),
+            OpenApiParameter(
+                name='min_price',
+                type=OpenApiTypes.FLOAT,
+                location=OpenApiParameter.QUERY,
+                description='Minimum price',
+                required=False
+            ),
+            OpenApiParameter(
+                name='max_price',
+                type=OpenApiTypes.FLOAT,
+                location=OpenApiParameter.QUERY,
+                description='Maximum price',
+                required=False
+            ),
+            OpenApiParameter(
+                name='search',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Search in product name and description',
+                required=False
+            ),
+            OpenApiParameter(
+                name='ordering',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Order by: name, price, created_at, view_count (prefix with - for descending)',
+                required=False
+            )
+        ]
+    ),
+    create=extend_schema(
+        tags=['Products'],
+        summary='Create Product',
+        description='Create a new product with optional thumbnail and images'
+    ),
+    retrieve=extend_schema(
+        tags=['Products'],
+        summary='Get Product',
+        description='Get product details (increments view count)'
+    ),
+    update=extend_schema(
+        tags=['Products'],
+        summary='Update Product',
+        description='Update product details'
+    ),
+    partial_update=extend_schema(
+        tags=['Products'],
+        summary='Partial Update Product',
+        description='Partially update product details'
+    ),
+    destroy=extend_schema(
+        tags=['Products'],
+        summary='Delete Product',
+        description='Delete a product'
+    )
+)
 class ProductViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Product CRUD operations
@@ -108,7 +251,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     - POST /api/products/{id}/update_thumbnail/ - Update product thumbnail
     """
     queryset = Product.objects.all()
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['categories', 'voucher_enabled']
@@ -150,6 +293,27 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     
+    @extend_schema(
+        tags=['Products'],
+        summary='Upload Product Images',
+        description='Upload multiple images to a product',
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'images': {
+                        'type': 'array',
+                        'items': {'type': 'string', 'format': 'binary'}
+                    },
+                    'caption': {'type': 'string'}
+                }
+            }
+        },
+        responses={
+            201: ProductImageSerializer(many=True),
+            400: {'description': 'No images provided'}
+        }
+    )
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def upload_images(self, request, pk=None):
         """
@@ -178,6 +342,25 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer = ProductImageSerializer(created_images, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     
+    @extend_schema(
+        tags=['Products'],
+        summary='Delete Product Image',
+        description='Delete a specific product image',
+        parameters=[
+            OpenApiParameter(
+                name='image_id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='ID of the image to delete',
+                required=True
+            )
+        ],
+        responses={
+            204: {'description': 'Image deleted successfully'},
+            400: {'description': 'image_id parameter required'},
+            404: {'description': 'Image not found'}
+        }
+    )
     @action(detail=True, methods=['delete'])
     def delete_image(self, request, pk=None):
         """
@@ -206,6 +389,24 @@ class ProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
     
+    @extend_schema(
+        tags=['Products'],
+        summary='Update Product Thumbnail',
+        description='Update or replace product thumbnail image',
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'thumbnail': {'type': 'string', 'format': 'binary'}
+                },
+                'required': ['thumbnail']
+            }
+        },
+        responses={
+            200: ProductDetailSerializer,
+            400: {'description': 'No thumbnail provided'}
+        }
+    )
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def update_thumbnail(self, request, pk=None):
         """
@@ -232,6 +433,21 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(product)
         return Response(serializer.data)
     
+    @extend_schema(
+        tags=['Products'],
+        summary='Get Most Viewed Products',
+        description='Get list of most viewed products',
+        parameters=[
+            OpenApiParameter(
+                name='limit',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='Number of products to return (default: 10)',
+                required=False
+            )
+        ],
+        responses={200: ProductListSerializer(many=True)}
+    )
     @action(detail=False, methods=['get'])
     def most_viewed(self, request):
         """
@@ -243,6 +459,21 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer = ProductListSerializer(products, many=True, context={'request': request})
         return Response(serializer.data)
     
+    @extend_schema(
+        tags=['Products'],
+        summary='Get Latest Products',
+        description='Get list of latest products',
+        parameters=[
+            OpenApiParameter(
+                name='limit',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='Number of products to return (default: 10)',
+                required=False
+            )
+        ],
+        responses={200: ProductListSerializer(many=True)}
+    )
     @action(detail=False, methods=['get'])
     def latest(self, request):
         """
@@ -255,6 +486,38 @@ class ProductViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Product Images'],
+        summary='List Product Images',
+        description='Get list of all product images'
+    ),
+    create=extend_schema(
+        tags=['Product Images'],
+        summary='Create Product Image',
+        description='Upload a new product image'
+    ),
+    retrieve=extend_schema(
+        tags=['Product Images'],
+        summary='Get Product Image',
+        description='Get details of a specific product image'
+    ),
+    update=extend_schema(
+        tags=['Product Images'],
+        summary='Update Product Image',
+        description='Update product image details'
+    ),
+    partial_update=extend_schema(
+        tags=['Product Images'],
+        summary='Partial Update Product Image',
+        description='Partially update product image details'
+    ),
+    destroy=extend_schema(
+        tags=['Product Images'],
+        summary='Delete Product Image',
+        description='Delete a product image'
+    )
+)
 class ProductImageViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing product images independently
@@ -268,12 +531,44 @@ class ProductImageViewSet(viewsets.ModelViewSet):
     """
     queryset = ProductImage.objects.all()
     serializer_class = ProductImageSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['product']
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Comments'],
+        summary='List Comments',
+        description='Get list of product comments with filtering'
+    ),
+    create=extend_schema(
+        tags=['Comments'],
+        summary='Create Comment',
+        description='Create a new comment on a product (authenticated users only)'
+    ),
+    retrieve=extend_schema(
+        tags=['Comments'],
+        summary='Get Comment',
+        description='Get details of a specific comment'
+    ),
+    update=extend_schema(
+        tags=['Comments'],
+        summary='Update Comment',
+        description='Update comment (owner only)'
+    ),
+    partial_update=extend_schema(
+        tags=['Comments'],
+        summary='Partial Update Comment',
+        description='Partially update comment (owner only)'
+    ),
+    destroy=extend_schema(
+        tags=['Comments'],
+        summary='Delete Comment',
+        description='Delete comment (owner only)'
+    )
+)
 class CommentViewSet(viewsets.ModelViewSet):
     """
     ViewSet for product comments
@@ -287,7 +582,7 @@ class CommentViewSet(viewsets.ModelViewSet):
     """
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['product', 'user']
     ordering_fields = ['created_at']
@@ -310,6 +605,18 @@ class CommentViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Vouchers'],
+        summary='List User Vouchers',
+        description='Get list of vouchers belonging to the current user'
+    ),
+    retrieve=extend_schema(
+        tags=['Vouchers'],
+        summary='Get Voucher',
+        description='Get details of a specific voucher'
+    )
+)
 class VoucherViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for viewing vouchers (read-only)
@@ -331,6 +638,27 @@ class VoucherViewSet(viewsets.ReadOnlyModelViewSet):
 
 # ==================== REPORT APIs ====================
 
+@extend_schema(
+    tags=['Reports'],
+    summary='Report Endpoints Overview',
+    description='Get list of available report endpoints',
+    responses={
+        200: {
+            'description': 'List of report endpoints',
+            'examples': {
+                'application/json': {
+                    'message': 'Available report endpoints',
+                    'endpoints': {
+                        'products_per_category': '/api/reports/products-per-category/',
+                        'product_views': '/api/reports/product-views/{product_id}/',
+                        'product_comments': '/api/reports/product-comments/{product_id}/',
+                        'category_stats': '/api/reports/category-stats/'
+                    }
+                }
+            }
+        }
+    }
+)
 class ReportAPIView(APIView):
     """
     API endpoint for various reports
@@ -341,7 +669,7 @@ class ReportAPIView(APIView):
     - GET /api/reports/product-comments/{id}/ - Total comments on a specific product
     - GET /api/reports/category-stats/ - Detailed statistics for all categories
     """
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     
     def get(self, request):
         """Return available report endpoints"""
@@ -356,6 +684,29 @@ class ReportAPIView(APIView):
         })
 
 
+@extend_schema(
+    tags=['Reports'],
+    summary='Products Per Category Report',
+    description='Get total number of products in each category',
+    responses={
+        200: {
+            'description': 'Products per category statistics',
+            'examples': {
+                'application/json': {
+                    'total_categories': 5,
+                    'categories': [
+                        {
+                            'id': 1,
+                            'name': 'Electronics',
+                            'slug': 'electronics',
+                            'product_count': 15
+                        }
+                    ]
+                }
+            }
+        }
+    }
+)
 class ProductsPerCategoryReportAPIView(APIView):
     """
     Report: Total of products per category
@@ -363,7 +714,7 @@ class ProductsPerCategoryReportAPIView(APIView):
     
     Returns count of products in each category
     """
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     
     def get(self, request):
         # Annotate categories with product count
@@ -377,6 +728,35 @@ class ProductsPerCategoryReportAPIView(APIView):
         })
 
 
+@extend_schema(
+    tags=['Reports'],
+    summary='Product Views Report',
+    description='Get total view count for a specific product',
+    parameters=[
+        OpenApiParameter(
+            name='product_id',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.PATH,
+            description='Product ID',
+            required=True
+        )
+    ],
+    responses={
+        200: {
+            'description': 'Product view statistics',
+            'examples': {
+                'application/json': {
+                    'product_id': 1,
+                    'product_name': 'iPhone 15',
+                    'product_slug': 'iphone-15',
+                    'total_views': 150,
+                    'created_at': '2025-01-01T00:00:00Z'
+                }
+            }
+        },
+        404: {'description': 'Product not found'}
+    }
+)
 class ProductViewsReportAPIView(APIView):
     """
     Report: Total views of a product
@@ -384,7 +764,7 @@ class ProductViewsReportAPIView(APIView):
     
     Returns view count for a specific product
     """
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, product_id):
         try:
@@ -403,6 +783,43 @@ class ProductViewsReportAPIView(APIView):
             )
 
 
+@extend_schema(
+    tags=['Reports'],
+    summary='Product Comments Report',
+    description='Get total comments and comment list for a specific product',
+    parameters=[
+        OpenApiParameter(
+            name='product_id',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.PATH,
+            description='Product ID',
+            required=True
+        )
+    ],
+    responses={
+        200: {
+            'description': 'Product comments statistics',
+            'examples': {
+                'application/json': {
+                    'product_id': 1,
+                    'product_name': 'iPhone 15',
+                    'product_slug': 'iphone-15',
+                    'total_comments': 25,
+                    'comments': [
+                        {
+                            'id': 1,
+                            'body': 'Great product!',
+                            'created_at': '2025-01-01T00:00:00Z',
+                            'user__username': 'john',
+                            'user__email': 'john@example.com'
+                        }
+                    ]
+                }
+            }
+        },
+        404: {'description': 'Product not found'}
+    }
+)
 class ProductCommentsReportAPIView(APIView):
     """
     Report: Total comments on a product
@@ -410,7 +827,7 @@ class ProductCommentsReportAPIView(APIView):
     
     Returns comment count and list of comments for a specific product
     """
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     
     def get(self, request, product_id):
         try:
@@ -437,6 +854,33 @@ class ProductCommentsReportAPIView(APIView):
             )
 
 
+@extend_schema(
+    tags=['Reports'],
+    summary='Category Statistics Report',
+    description='Get comprehensive statistics for all categories including product count, views, and comments',
+    responses={
+        200: {
+            'description': 'Detailed category statistics',
+            'examples': {
+                'application/json': {
+                    'total_categories': 5,
+                    'statistics': [
+                        {
+                            'category_id': 1,
+                            'category_name': 'Electronics',
+                            'category_slug': 'electronics',
+                            'total_products': 15,
+                            'total_views': 500,
+                            'total_comments': 75,
+                            'has_parent': False,
+                            'parent_name': None
+                        }
+                    ]
+                }
+            }
+        }
+    }
+)
 class CategoryStatsReportAPIView(APIView):
     """
     Report: Detailed statistics for all categories
@@ -444,7 +888,7 @@ class CategoryStatsReportAPIView(APIView):
     
     Returns comprehensive statistics including product count, total views, comments
     """
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated]
     
     def get(self, request):
         categories = Category.objects.all()

@@ -3,6 +3,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
+from drf_spectacular.types import OpenApiTypes
 from .models import User
 from .serializers import (
     UserSerializer, 
@@ -13,6 +15,48 @@ from .serializers import (
 from .signals import user_signed_up
 
 
+@extend_schema(
+    tags=['Authentication'],
+    summary='User Registration',
+    description='Register a new user account. Returns user data and JWT tokens.',
+    request=RegisterSerializer,
+    responses={
+        201: {
+            'description': 'User successfully registered',
+            'examples': {
+                'application/json': {
+                    'message': 'User registered successfully. Confirmation email will be sent shortly.',
+                    'user': {
+                        'id': 1,
+                        'username': 'testuser',
+                        'email': 'test@example.com',
+                        'first_name': 'Test',
+                        'last_name': 'User'
+                    },
+                    'tokens': {
+                        'refresh': 'eyJ0eXAiOiJKV1QiLCJhbGc...',
+                        'access': 'eyJ0eXAiOiJKV1QiLCJhbGc...'
+                    }
+                }
+            }
+        },
+        400: {'description': 'Bad request - validation errors'}
+    },
+    examples=[
+        OpenApiExample(
+            'Registration Example',
+            value={
+                'username': 'testuser',
+                'email': 'test@example.com',
+                'password': 'SecurePass123!',
+                'password2': 'SecurePass123!',
+                'first_name': 'Test',
+                'last_name': 'User'
+            },
+            request_only=True
+        )
+    ]
+)
 class RegisterAPIView(generics.CreateAPIView):
     """
     API endpoint for user registration
@@ -43,6 +87,43 @@ class RegisterAPIView(generics.CreateAPIView):
         }, status=status.HTTP_201_CREATED)
 
 
+@extend_schema(
+    tags=['Authentication'],
+    summary='User Login',
+    description='Authenticate user and get JWT tokens',
+    request=LoginSerializer,
+    responses={
+        200: {
+            'description': 'Login successful',
+            'examples': {
+                'application/json': {
+                    'message': 'Login successful',
+                    'user': {
+                        'id': 1,
+                        'username': 'testuser',
+                        'email': 'test@example.com'
+                    },
+                    'tokens': {
+                        'refresh': 'eyJ0eXAiOiJKV1QiLCJhbGc...',
+                        'access': 'eyJ0eXAiOiJKV1QiLCJhbGc...'
+                    }
+                }
+            }
+        },
+        401: {'description': 'Invalid credentials'},
+        403: {'description': 'Account is disabled'}
+    },
+    examples=[
+        OpenApiExample(
+            'Login Example',
+            value={
+                'username': 'testuser',
+                'password': 'SecurePass123!'
+            },
+            request_only=True
+        )
+    ]
+)
 class LoginAPIView(APIView):
     """
     API endpoint for user login
@@ -83,6 +164,31 @@ class LoginAPIView(APIView):
             }, status=status.HTTP_401_UNAUTHORIZED)
 
 
+@extend_schema(
+    tags=['Authentication'],
+    summary='User Logout',
+    description='Logout user by blacklisting the refresh token',
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'refresh_token': {'type': 'string', 'description': 'JWT refresh token to blacklist'}
+            },
+            'required': ['refresh_token']
+        }
+    },
+    responses={
+        205: {'description': 'Logout successful'},
+        400: {'description': 'Bad request - token required or invalid'}
+    },
+    examples=[
+        OpenApiExample(
+            'Logout Example',
+            value={'refresh_token': 'eyJ0eXAiOiJKV1QiLCJhbGc...'},
+            request_only=True
+        )
+    ]
+)
 class LogoutAPIView(APIView):
     """
     API endpoint for user logout
@@ -109,6 +215,15 @@ class LogoutAPIView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    tags=['User Profile'],
+    summary='Get/Update User Profile',
+    description='Retrieve or update the authenticated user profile',
+    responses={
+        200: UserSerializer,
+        401: {'description': 'Authentication required'}
+    }
+)
 class UserProfileAPIView(generics.RetrieveUpdateAPIView):
     """
     API endpoint to get and update user profile
@@ -122,6 +237,34 @@ class UserProfileAPIView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
+@extend_schema(
+    tags=['User Profile'],
+    summary='Change Password',
+    description='Change the authenticated user password',
+    request=ChangePasswordSerializer,
+    responses={
+        200: {
+            'description': 'Password changed successfully',
+            'examples': {
+                'application/json': {
+                    'message': 'Password changed successfully'
+                }
+            }
+        },
+        400: {'description': 'Bad request - old password incorrect or validation errors'}
+    },
+    examples=[
+        OpenApiExample(
+            'Change Password Example',
+            value={
+                'old_password': 'OldPass123!',
+                'new_password': 'NewPass123!',
+                'new_password2': 'NewPass123!'
+            },
+            request_only=True
+        )
+    ]
+)
 class ChangePasswordAPIView(APIView):
     """
     API endpoint to change user password
@@ -150,6 +293,15 @@ class ChangePasswordAPIView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+@extend_schema(
+    tags=['User Management'],
+    summary='List All Users',
+    description='Get list of all users (Admin only)',
+    responses={
+        200: UserSerializer(many=True),
+        403: {'description': 'Admin permission required'}
+    }
+)
 class UserListAPIView(generics.ListAPIView):
     """
     API endpoint to list all users (admin only)

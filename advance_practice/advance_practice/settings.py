@@ -46,6 +46,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',
     'django_filters',
     'django_celery_beat',
     'User',
@@ -155,20 +157,73 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+        'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Django Advance Practice API',
+    'DESCRIPTION': '''
+    Comprehensive API documentation for Django Advance Practice project.
+    
+    Features:
+    - User Authentication (JWT)
+    - Category Management (Tree Structure)
+    - Product Management (Multiple Images, Views Tracking)
+    - Comments System
+    - Vouchers Management
+    - Analytics & Reports
+    
+    Authentication:
+    1. Register or Login to get JWT access token
+    2. Click "Authorize" button (top right)
+    3. Enter: Bearer <your_access_token>
+    4. All authenticated endpoints will work
+    ''',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SWAGGER_UI_DIST': 'SIDECAR',
+    'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
+    'REDOC_DIST': 'SIDECAR',
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SORT_OPERATIONS': False,
+    'SCHEMA_PATH_PREFIX': r'/api/',
+    'SERVERS': [
+        {'url': 'http://127.0.0.1:8000', 'description': 'Local Development Server'},
+    ],
+    'TAGS': [
+        {'name': 'Authentication', 'description': 'User registration, login, logout and token management'},
+        {'name': 'User Profile', 'description': 'User profile and password management'},
+        {'name': 'User Management', 'description': 'User administration (Admin only)'},
+        {'name': 'Categories', 'description': 'Category CRUD operations with tree structure support'},
+        {'name': 'Products', 'description': 'Product management with images and tracking'},
+        {'name': 'Product Images', 'description': 'Product image management'},
+        {'name': 'Comments', 'description': 'Product comments and reviews'},
+        {'name': 'Vouchers', 'description': 'User vouchers management'},
+        {'name': 'Reports', 'description': 'Analytics and statistics reports'},
+    ],
+    'APPEND_COMPONENTS': {
+        'securitySchemes': {
+            'jwtAuth': {
+                'type': 'http',
+                'scheme': 'bearer',
+                'bearerFormat': 'JWT',
+            }
+        }
+    },
+    'SECURITY': [{'jwtAuth': []}],
 }
 
 # JWT settings
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=5),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,

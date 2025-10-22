@@ -11,3 +11,4 @@ django-celery-beat
 redis
 python-dotenv
 gunicorn
+drf-spectacular[sidecar]
