@@ -12,3 +12,4 @@ redis
 python-dotenv
 gunicorn
 drf-spectacular[sidecar]
+django-cors-headers
