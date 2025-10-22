@@ -165,6 +165,30 @@ class CategoryViewSet(viewsets.ModelViewSet):
         products = category.products.all()
         serializer = ProductListSerializer(products, many=True, context={'request': request})
         return Response(serializer.data)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Override destroy to check edit lock before deletion"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        category = self.get_object()
+        
+        # Check if category is locked by another user
+        if category.editing_user and category.edit_lock_time:
+            # Check if lock is still valid (not expired)
+            if timezone.now() < category.edit_lock_time:
+                # Check if it's locked by another user
+                if category.editing_user != request.user:
+                    return Response({
+                        'error': 'Cannot delete',
+                        'message': f'Category is currently being edited by {category.editing_user.username}',
+                        'is_locked': True,
+                        'locked_by': category.editing_user.username,
+                        'locked_until': category.edit_lock_time
+                    }, status=status.HTTP_423_LOCKED)
+        
+        # Proceed with deletion
+        return super().destroy(request, *args, **kwargs)
 
 
 @extend_schema_view(
@@ -484,6 +508,30 @@ class ProductViewSet(viewsets.ModelViewSet):
         products = Product.objects.order_by('-created_at')[:limit]
         serializer = ProductListSerializer(products, many=True, context={'request': request})
         return Response(serializer.data)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Override destroy to check edit lock before deletion"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        product = self.get_object()
+        
+        # Check if product is locked by another user
+        if product.editing_user and product.edit_lock_time:
+            # Check if lock is still valid (not expired)
+            if timezone.now() < product.edit_lock_time:
+                # Check if it's locked by another user
+                if product.editing_user != request.user:
+                    return Response({
+                        'error': 'Cannot delete',
+                        'message': f'Product is currently being edited by {product.editing_user.username}',
+                        'is_locked': True,
+                        'locked_by': product.editing_user.username,
+                        'locked_until': product.edit_lock_time
+                    }, status=status.HTTP_423_LOCKED)
+        
+        # Proceed with deletion
+        return super().destroy(request, *args, **kwargs)
 
 
 @extend_schema_view(

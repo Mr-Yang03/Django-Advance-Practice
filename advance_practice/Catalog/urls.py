@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from . import api_views
+from . import api_views, edit_lock_views
 
 # Create router for ViewSets
 router = DefaultRouter()
@@ -20,4 +20,16 @@ urlpatterns = [
     path('api/reports/product-views/<int:product_id>/', api_views.ProductViewsReportAPIView.as_view(), name='product-views'),
     path('api/reports/product-comments/<int:product_id>/', api_views.ProductCommentsReportAPIView.as_view(), name='product-comments'),
     path('api/reports/category-stats/', api_views.CategoryStatsReportAPIView.as_view(), name='category-stats'),
+    
+    # Edit Lock APIs for Products
+    path('api/products/<int:product_id>/editable/me/', edit_lock_views.product_edit_lock, name='product-edit-lock'),
+    path('api/products/<int:product_id>/editable/release/', edit_lock_views.product_edit_release, name='product-edit-release'),
+    path('api/products/<int:product_id>/editable/maintain/', edit_lock_views.product_edit_maintain, name='product-edit-maintain'),
+    path('api/products/release-my-locks/', edit_lock_views.release_my_product_locks, name='release-my-product-locks'),
+    
+    # Edit Lock APIs for Categories
+    path('api/categories/<int:category_id>/editable/me/', edit_lock_views.category_edit_lock, name='category-edit-lock'),
+    path('api/categories/<int:category_id>/editable/release/', edit_lock_views.category_edit_release, name='category-edit-release'),
+    path('api/categories/<int:category_id>/editable/maintain/', edit_lock_views.category_edit_maintain, name='category-edit-maintain'),
+    path('api/categories/release-my-locks/', edit_lock_views.release_my_category_locks, name='release-my-category-locks'),
 ]

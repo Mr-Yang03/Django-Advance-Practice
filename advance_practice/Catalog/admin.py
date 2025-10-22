@@ -24,7 +24,7 @@ class ProductImageInline(admin.TabularInline):
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     """Admin configuration for Category model"""
-    list_display = ('name', 'slug', 'parent', 'products_count', 'children_count', 'image_preview', 'created_at')
+    list_display = ('name', 'slug', 'parent', 'products_count', 'children_count', 'editing_status', 'image_preview', 'created_at')
     list_filter = ('parent', 'created_at', 'updated_at')
     search_fields = ('name', 'slug', 'description')
     prepopulated_fields = {'slug': ('name',)}
@@ -44,13 +44,31 @@ class CategoryAdmin(admin.ModelAdmin):
         ('Hierarchy', {
             'fields': ('parent',)
         }),
+        ('Edit Lock', {
+            'fields': ('editing_user', 'edit_lock_time'),
+            'classes': ('collapse',)
+        }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
     
-    readonly_fields = ('created_at', 'updated_at', 'products_count', 'children_count')
+    readonly_fields = ('created_at', 'updated_at', 'products_count', 'children_count', 'editing_user', 'edit_lock_time')
+    
+    def editing_status(self, obj):
+        """Show edit lock status"""
+        if obj.editing_user and obj.edit_lock_time:
+            from django.utils import timezone
+            if timezone.now() < obj.edit_lock_time:
+                return format_html(
+                    '<span style="color: orange;">🔒 {}</span>',
+                    obj.editing_user.username
+                )
+            else:
+                return format_html('<span style="color: gray;">🔓 Expired</span>')
+        return format_html('<span style="color: green;">🔓 Available</span>')
+    editing_status.short_description = 'Edit Status'
     
     def image_preview(self, obj):
         if obj.image:
@@ -85,7 +103,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_display = (
         'name', 'slug', 'price', 'view_count', 
         'voucher_enabled', 'voucher_quantity', 
-        'thumbnail_preview', 'images_count', 'comments_count',
+        'editing_status', 'thumbnail_preview', 'images_count', 'comments_count',
         'created_at'
     )
     list_filter = (
@@ -134,7 +152,21 @@ class ProductAdmin(admin.ModelAdmin):
         }),
     )
     
-    readonly_fields = ('created_at', 'updated_at', 'view_count')
+    readonly_fields = ('created_at', 'updated_at', 'view_count', 'editing_user', 'edit_lock_time')
+    
+    def editing_status(self, obj):
+        """Show edit lock status"""
+        if obj.editing_user and obj.edit_lock_time:
+            from django.utils import timezone
+            if timezone.now() < obj.edit_lock_time:
+                return format_html(
+                    '<span style="color: orange;">🔒 {}</span>',
+                    obj.editing_user.username
+                )
+            else:
+                return format_html('<span style="color: gray;">🔓 Expired</span>')
+        return format_html('<span style="color: green;">🔓 Available</span>')
+    editing_status.short_description = 'Edit Status'
     
     def thumbnail_preview(self, obj):
         if obj.thumbnail:

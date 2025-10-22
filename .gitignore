@@ -4,3 +4,4 @@ docs
 media
 *migrations
 .env
+core

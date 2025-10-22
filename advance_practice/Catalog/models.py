@@ -28,6 +28,19 @@ class Category(TimeStampedModel):
         blank=True, 
         related_name='children'
     )
+    
+    # --- Fields for Classical Practice (Edit Lock) ---
+    
+    # Request to "mark the current editing user"
+    editing_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='editing_category'
+    )
+    # Request to "timeout, e.g., 5 minutes"
+    edit_lock_time = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Category"
