@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',
+    'debug_toolbar',
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
@@ -57,14 +58,15 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'debug_toolbar.middleware.DebugToolbarMiddleware',  # Move to end
 ]
 
 ROOT_URLCONF = 'advance_practice.urls'
@@ -134,6 +136,9 @@ DATABASES = {
     }
 }
 
+INTERNAL_IPS = [
+    '127.0.0.1',
+]
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -257,7 +262,7 @@ from datetime import timedelta
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(hours=1),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
     'ALGORITHM': 'HS256',
@@ -320,3 +325,37 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL')
+
+# --- Django Debug Toolbar Configuration ---
+
+def show_toolbar(request):
+    """
+    Custom callback to determine when to show debug toolbar.
+    Only show for:
+    - HTML requests (not API/JSON)
+    - Requests from localhost/127.0.0.1
+    """
+    # Don't show for API requests (check if it's a JSON/REST API request)
+    if request.path.startswith('/api/') or request.path.startswith('/catalog/api/'):
+        return False
+    
+    # Don't show for AJAX requests
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return False
+    
+    # Don't show if Accept header prefers JSON
+    accept = request.headers.get('Accept', '')
+    if 'application/json' in accept and 'text/html' not in accept:
+        return False
+    
+    # Show for local development
+    return DEBUG and request.META.get('REMOTE_ADDR') in INTERNAL_IPS
+
+DEBUG_TOOLBAR_CONFIG = {
+    'SHOW_TOOLBAR_CALLBACK': 'advance_practice.settings.show_toolbar',
+    # Don't show toolbar on these paths
+    'SKIP_TEMPLATE_PREFIXES': (
+        'admin/',
+        'debug_toolbar/',
+    ),
+}

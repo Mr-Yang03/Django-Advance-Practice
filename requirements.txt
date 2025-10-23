@@ -13,3 +13,4 @@ python-dotenv
 gunicorn
 drf-spectacular[sidecar]
 django-cors-headers
+django-debug-toolbar

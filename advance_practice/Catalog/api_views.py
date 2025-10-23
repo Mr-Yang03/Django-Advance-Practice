@@ -509,6 +509,89 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer = ProductListSerializer(products, many=True, context={'request': request})
         return Response(serializer.data)
     
+    @extend_schema(
+        tags=['Products'],
+        summary='Claim Voucher Code',
+        description='''
+        Claim a voucher code for a product.
+        
+        Business Rules:
+        - Each user can only claim 1 voucher per product
+        - Product must have voucher_enabled=True
+        - Product must have available vouchers (voucher_quantity > 0)
+        - Voucher code will be generated and returned
+        
+        Response Examples:
+        - Success: Returns voucher code
+        - No more vouchers: "There is no more available voucher"
+        - Already claimed: User already has a voucher for this product
+        ''',
+        responses={
+            200: VoucherSerializer,
+            400: {'description': 'Voucher not enabled, no more vouchers, or already claimed'},
+            404: {'description': 'Product not found'}
+        }
+    )
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def claim_voucher(self, request, pk=None):
+        """
+        Claim a voucher code for this product
+        POST /api/products/{id}/claim_voucher/
+        """
+        import uuid
+        from django.db import transaction
+        
+        product = self.get_object()
+        user = request.user
+        
+        # Check if voucher is enabled for this product
+        if not product.voucher_enabled:
+            return Response(
+                {'error': 'Voucher is not enabled for this product'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if user already has a voucher for this product
+        existing_voucher = Voucher.objects.filter(product=product, user=user).first()
+        if existing_voucher:
+            return Response(
+                {
+                    'error': 'You already have a voucher for this product',
+                    'voucher': VoucherSerializer(existing_voucher, context={'request': request}).data
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Use transaction to ensure atomicity
+        with transaction.atomic():
+            # Lock the product row for update to prevent race conditions
+            product = Product.objects.select_for_update().get(pk=pk)
+            
+            # Check if there are available vouchers
+            if product.voucher_quantity <= 0:
+                return Response(
+                    {'error': 'There is no more available voucher'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Generate unique voucher code
+            voucher_code = f"VOUCHER-{uuid.uuid4().hex[:8].upper()}"
+            
+            # Create voucher
+            voucher = Voucher.objects.create(
+                product=product,
+                user=user,
+                code=voucher_code
+            )
+            
+            # Decrease voucher quantity
+            product.voucher_quantity -= 1
+            product.save(update_fields=['voucher_quantity'])
+        
+        # Return the created voucher
+        serializer = VoucherSerializer(voucher, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
     def destroy(self, request, *args, **kwargs):
         """Override destroy to check edit lock before deletion"""
         from django.utils import timezone
