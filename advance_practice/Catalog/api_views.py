@@ -6,7 +6,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 from .models import Category, Product, ProductImage, Comment, Voucher
 from .serializers import (
@@ -81,10 +81,8 @@ class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'description']
-    ordering_fields = ['name', 'created_at']
-    ordering = ['name']
     
     def get_queryset(self):
         """Filter categories based on query params"""
@@ -224,13 +222,6 @@ class CategoryViewSet(viewsets.ModelViewSet):
                 location=OpenApiParameter.QUERY,
                 description='Search in product name and description',
                 required=False
-            ),
-            OpenApiParameter(
-                name='ordering',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Order by: name, price, created_at, view_count (prefix with - for descending)',
-                required=False
             )
         ]
     ),
@@ -277,11 +268,9 @@ class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['categories', 'voucher_enabled']
     search_fields = ['name', 'description']
-    ordering_fields = ['name', 'price', 'created_at', 'view_count']
-    ordering = ['-created_at']
     
     def get_serializer_class(self):
         """Use different serializers for list and detail views"""
@@ -321,6 +310,15 @@ class ProductViewSet(viewsets.ModelViewSet):
         tags=['Products'],
         summary='Upload Product Images',
         description='Upload multiple images to a product',
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+                description='Product ID',
+                required=True
+            )
+        ],
         request={
             'multipart/form-data': {
                 'type': 'object',
@@ -335,10 +333,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         },
         responses={
             201: ProductImageSerializer(many=True),
-            400: {'description': 'No images provided'}
+            400: OpenApiResponse(description='No images provided')
         }
     )
-    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser], filter_backends=[], filterset_fields=[], pagination_class=None)
     def upload_images(self, request, pk=None):
         """
         Upload additional images to a product
@@ -526,6 +524,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         - No more vouchers: "There is no more available voucher"
         - Already claimed: User already has a voucher for this product
         ''',
+        request=None,  # No request body needed
         responses={
             200: VoucherSerializer,
             400: {'description': 'Voucher not enabled, no more vouchers, or already claimed'},
@@ -714,10 +713,8 @@ class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend]
     filterset_fields = ['product', 'user']
-    ordering_fields = ['created_at']
-    ordering = ['created_at']
     
     def perform_create(self, serializer):
         """Set user to current authenticated user"""

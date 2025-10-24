@@ -35,9 +35,10 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'slug', 'description', 'image', 
             'parent', 'parent_name', 'children_count', 'products_count',
+            'editing_user', 'edit_lock_time',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['slug', 'created_at', 'updated_at']
+        read_only_fields = ['slug', 'editing_user', 'edit_lock_time', 'created_at', 'updated_at']
     
     def get_children_count(self, obj):
         """Count of child categories"""
@@ -88,7 +89,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
 class ProductListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for product list"""
-    categories = serializers.StringRelatedField(many=True, read_only=True)
+    categories = CategorySerializer(many=True, read_only=True)
     thumbnail_url = serializers.SerializerMethodField()
     
     class Meta:
@@ -132,6 +133,8 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     )
     
     thumbnail_url = serializers.SerializerMethodField()
+    available_vouchers = serializers.SerializerMethodField()
+    user_has_claimed = serializers.SerializerMethodField()
     
     class Meta:
         model = Product
@@ -139,11 +142,11 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             'id', 'name', 'slug', 'description', 'price', 
             'thumbnail', 'thumbnail_url', 'view_count',
             'categories', 'category_ids', 'images', 'uploaded_images',
-            'voucher_enabled', 'voucher_quantity',
+            'voucher_enabled', 'voucher_quantity', 'available_vouchers', 'user_has_claimed',
             'editing_user', 'edit_lock_time',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['slug', 'view_count', 'created_at', 'updated_at']
+        read_only_fields = ['slug', 'view_count', 'editing_user', 'edit_lock_time', 'created_at', 'updated_at']
         extra_kwargs = {
             'name': {'help_text': 'Product name'},
             'description': {'help_text': 'Detailed product description'},
@@ -158,6 +161,24 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             if request:
                 return request.build_absolute_uri(obj.thumbnail.url)
         return None
+    
+    def get_available_vouchers(self, obj):
+        """
+        Always return actual voucher quantity remaining.
+        """
+        return obj.voucher_quantity if obj.voucher_enabled else 0
+    
+    def get_user_has_claimed(self, obj):
+        """
+        Check if current user has already claimed voucher for this product.
+        Returns True if user has voucher, False otherwise.
+        """
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        
+        # Check if user already has a voucher for this product
+        return Voucher.objects.filter(product=obj, user=request.user).exists()
     
     def create_thumbnail(self, image):
         """Create thumbnail from uploaded image"""

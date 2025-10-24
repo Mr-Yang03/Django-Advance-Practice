@@ -3,6 +3,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 from .models import User
@@ -57,6 +59,7 @@ from .signals import user_signed_up
         )
     ]
 )
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterAPIView(generics.CreateAPIView):
     """
     API endpoint for user registration
@@ -124,6 +127,7 @@ class RegisterAPIView(generics.CreateAPIView):
         )
     ]
 )
+@method_decorator(csrf_exempt, name='dispatch')
 class LoginAPIView(APIView):
     """
     API endpoint for user login

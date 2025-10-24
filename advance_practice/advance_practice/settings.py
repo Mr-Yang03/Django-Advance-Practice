@@ -29,14 +29,17 @@ load_dotenv(dotenv_path=env_path)
 SECRET_KEY = 'django-insecure-a@b9f6h&u-1ihqds7*82#v%2xn7a9a46lc19(8e4u(_8$^5_#k'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = []
 
 
 # Application definition
+DEBUG_APPS = [
+    'debug_toolbar',
+]
 
-INSTALLED_APPS = [
+MAIN_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -44,7 +47,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',
-    'debug_toolbar',
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
@@ -56,6 +58,8 @@ INSTALLED_APPS = [
     'Catalog',
     'core',
 ]
+
+INSTALLED_APPS = MAIN_APPS + DEBUG_APPS if DEBUG else MAIN_APPS
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -261,7 +265,7 @@ SPECTACULAR_SETTINGS = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
     'REFRESH_TOKEN_LIFETIME': timedelta(hours=1),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
