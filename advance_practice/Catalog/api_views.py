@@ -306,6 +306,53 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     
+    def update(self, request, *args, **kwargs):
+        """
+        Override update to use select_for_update() for row-level locking.
+        Prevents race conditions when multiple users try to edit simultaneously.
+        """
+        from django.db import transaction
+        from django.utils import timezone
+        
+        partial = kwargs.pop('partial', False)
+        
+        # Use transaction with select_for_update to lock the row
+        with transaction.atomic():
+            # Lock the product row for update (blocks other transactions)
+            instance = Product.objects.select_for_update().get(pk=self.kwargs['pk'])
+            
+            # Check if product is locked by another user
+            if instance.editing_user and instance.edit_lock_time:
+                if timezone.now() < instance.edit_lock_time:
+                    if instance.editing_user != request.user:
+                        return Response({
+                            'error': 'Cannot update',
+                            'message': f'Product is currently being edited by {instance.editing_user.username}',
+                            'is_locked': True,
+                            'locked_by': instance.editing_user.username,
+                            'locked_until': instance.edit_lock_time.isoformat()
+                        }, status=status.HTTP_423_LOCKED)
+            
+            # Perform the update
+            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            
+            # Release lock after successful update
+            instance.editing_user = None
+            instance.edit_lock_time = None
+            instance.save(update_fields=['editing_user', 'edit_lock_time'])
+            
+            if getattr(instance, '_prefetched_objects_cache', None):
+                instance._prefetched_objects_cache = {}
+            
+            return Response(serializer.data)
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Override partial_update to use select_for_update()"""
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+    
     @extend_schema(
         tags=['Products'],
         summary='Upload Product Images',

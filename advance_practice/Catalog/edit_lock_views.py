@@ -79,54 +79,61 @@ def clear_expired_lock(obj):
 def product_edit_lock(request, product_id):
     """
     API: POST /catalog/api/products/{product_id}/editable/me
-    Request permission to edit a product
+    Request permission to edit a product with row-level locking
     """
-    try:
-        product = Product.objects.get(id=product_id)
-    except Product.DoesNotExist:
-        return Response(
-            {'error': 'Product not found'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+    from django.db import transaction
     
-    # Clear expired lock first
-    clear_expired_lock(product)
-    
-    # Check if product is being edited
-    if product.editing_user:
-        # If the same user, extend the lock
-        if product.editing_user == request.user:
-            product.edit_lock_time = timezone.now() + LOCK_TIMEOUT
-            product.save(update_fields=['edit_lock_time'])
-            
-            return Response({
-                'status': 'allowed',
-                'message': 'You can continue editing this product',
-                'editing_user': request.user.username,
-                'lock_expires_at': product.edit_lock_time.isoformat(),
-                'lock_duration_seconds': int(LOCK_TIMEOUT.total_seconds())
-            }, status=status.HTTP_200_OK)
-        else:
-            # Another user is editing
-            return Response({
-                'status': 'locked',
-                'message': 'This product is being edited by another user',
-                'editing_user': product.editing_user.username,
-                'lock_expires_at': product.edit_lock_time.isoformat() if product.edit_lock_time else None
-            }, status=status.HTTP_409_CONFLICT)
-    
-    # Lock is available, grant it
-    product.editing_user = request.user
-    product.edit_lock_time = timezone.now() + LOCK_TIMEOUT
-    product.save(update_fields=['editing_user', 'edit_lock_time'])
-    
-    return Response({
-        'status': 'allowed',
-        'message': 'You can now edit this product',
-        'editing_user': request.user.username,
-        'lock_expires_at': product.edit_lock_time.isoformat(),
-        'lock_duration_seconds': int(LOCK_TIMEOUT.total_seconds())
-    }, status=status.HTTP_200_OK)
+    # Use transaction with select_for_update to prevent race conditions
+    with transaction.atomic():
+        try:
+            # Lock the product row - blocks other transactions until commit
+            product = Product.objects.select_for_update().get(id=product_id)
+        except Product.DoesNotExist:
+            return Response(
+                {'error': 'Product not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Clear expired lock first
+        if check_lock_expired(product):
+            product.editing_user = None
+            product.edit_lock_time = None
+        
+        # Check if product is being edited
+        if product.editing_user:
+            # If the same user, extend the lock
+            if product.editing_user == request.user:
+                product.edit_lock_time = timezone.now() + LOCK_TIMEOUT
+                product.save(update_fields=['edit_lock_time'])
+                
+                return Response({
+                    'status': 'allowed',
+                    'message': 'You can continue editing this product',
+                    'editing_user': request.user.username,
+                    'lock_expires_at': product.edit_lock_time.isoformat(),
+                    'lock_duration_seconds': int(LOCK_TIMEOUT.total_seconds())
+                }, status=status.HTTP_200_OK)
+            else:
+                # Another user is editing
+                return Response({
+                    'status': 'locked',
+                    'message': 'This product is being edited by another user',
+                    'editing_user': product.editing_user.username,
+                    'lock_expires_at': product.edit_lock_time.isoformat() if product.edit_lock_time else None
+                }, status=status.HTTP_409_CONFLICT)
+        
+        # Lock is available, grant it
+        product.editing_user = request.user
+        product.edit_lock_time = timezone.now() + LOCK_TIMEOUT
+        product.save(update_fields=['editing_user', 'edit_lock_time'])
+        
+        return Response({
+            'status': 'allowed',
+            'message': 'You can now edit this product',
+            'editing_user': request.user.username,
+            'lock_expires_at': product.edit_lock_time.isoformat(),
+            'lock_duration_seconds': int(LOCK_TIMEOUT.total_seconds())
+        }, status=status.HTTP_200_OK)
 
 
 @extend_schema(
@@ -261,41 +268,48 @@ def product_edit_maintain(request, product_id):
 def category_edit_lock(request, category_id):
     """
     API: POST /catalog/api/categories/{category_id}/editable/me
-    Request permission to edit a category
+    Request permission to edit a category with row-level locking
     """
-    try:
-        category = Category.objects.get(id=category_id)
-    except Category.DoesNotExist:
-        return Response(
-            {'error': 'Category not found'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+    from django.db import transaction
     
-    # Clear expired lock first
-    clear_expired_lock(category)
-    
-    # Check if category is being edited
-    if category.editing_user:
-        # If the same user, extend the lock
-        if category.editing_user == request.user:
-            category.edit_lock_time = timezone.now() + LOCK_TIMEOUT
-            category.save(update_fields=['edit_lock_time'])
-            
-            return Response({
-                'status': 'allowed',
-                'message': 'You can continue editing this category',
-                'editing_user': request.user.username,
-                'lock_expires_at': category.edit_lock_time.isoformat(),
-                'lock_duration_seconds': int(LOCK_TIMEOUT.total_seconds())
-            }, status=status.HTTP_200_OK)
-        else:
-            # Another user is editing
-            return Response({
-                'status': 'locked',
-                'message': 'This category is being edited by another user',
-                'editing_user': category.editing_user.username,
-                'lock_expires_at': category.edit_lock_time.isoformat() if category.edit_lock_time else None
-            }, status=status.HTTP_409_CONFLICT)
+    # Use transaction with select_for_update to prevent race conditions
+    with transaction.atomic():
+        try:
+            # Lock the category row - blocks other transactions until commit
+            category = Category.objects.select_for_update().get(id=category_id)
+        except Category.DoesNotExist:
+            return Response(
+                {'error': 'Category not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Clear expired lock first
+        if check_lock_expired(category):
+            category.editing_user = None
+            category.edit_lock_time = None
+        
+        # Check if category is being edited
+        if category.editing_user:
+            # If the same user, extend the lock
+            if category.editing_user == request.user:
+                category.edit_lock_time = timezone.now() + LOCK_TIMEOUT
+                category.save(update_fields=['edit_lock_time'])
+                
+                return Response({
+                    'status': 'allowed',
+                    'message': 'You can continue editing this category',
+                    'editing_user': request.user.username,
+                    'lock_expires_at': category.edit_lock_time.isoformat(),
+                    'lock_duration_seconds': int(LOCK_TIMEOUT.total_seconds())
+                }, status=status.HTTP_200_OK)
+            else:
+                # Another user is editing
+                return Response({
+                    'status': 'locked',
+                    'message': 'This category is being edited by another user',
+                    'editing_user': category.editing_user.username,
+                    'lock_expires_at': category.edit_lock_time.isoformat() if category.edit_lock_time else None
+                }, status=status.HTTP_409_CONFLICT)
     
     # Lock is available, grant it
     category.editing_user = request.user
