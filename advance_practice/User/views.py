@@ -69,3 +69,17 @@ def user_logout(request):
     if request.user.is_authenticated:
         logout(request)
         messages.success(request, 'Logged out successfully!')
+
+@login_required
+def delete_account(request):
+    """Delete user account view"""
+    if request.method == 'POST':
+        user = request.user
+        logout(request)
+        user.delete()
+        messages.success(request, 'Your account has been deleted successfully.')
+        # Redirect will be handled by the template or return a response
+        return HttpResponse(status=204)  # No content
+    
+    # If GET request, show confirmation page
+    return render(request, 'user/delete_account_confirm.html')

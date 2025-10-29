@@ -306,10 +306,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'User.tasks.db_health_check',
         'schedule': 60.0,  # Run every 60 seconds (1 minute)
     },
-    # Daily signup report - runs every day at 5:40 PM
+    # Daily signup report - runs every day at 3:00 PM
     'daily-signup-report': {
         'task': 'User.tasks.signup_report',
-        'schedule': crontab(hour=17, minute=40),  # Run at 5:40 PM every day
+        'schedule': crontab(hour=15, minute=0),  # Run at 3:00 PM every day
     },
 }
 

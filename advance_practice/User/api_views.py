@@ -299,6 +299,28 @@ class ChangePasswordAPIView(APIView):
 
 @extend_schema(
     tags=['User Management'],
+    summary='Delete User Account',
+    description='Delete the authenticated user account',
+    responses={
+        204: {'description': 'User account deleted successfully'},
+        401: {'description': 'Authentication required'}
+    }
+)
+class UserDeleteAPIView(APIView):
+    """
+    API endpoint to delete user account
+    DELETE /api/user/delete/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(
+    tags=['User Management'],
     summary='List All Users',
     description='Get list of all users (Admin only)',
     responses={
